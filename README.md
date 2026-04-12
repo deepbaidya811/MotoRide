@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# MotoRide 🏍️
+
+A motorcycle ride-hailing application built with Next.js, featuring real-time location tracking, route mapping, and seamless user experience.
+
+## Features
+
+### For Passengers
+- **Location Search**: Search pickup and drop-off locations with autocomplete suggestions
+- **Current Location**: Use your device's GPS for accurate current location
+- **Interactive Map**: View pickup/dropoff markers with real road route between locations
+- **Distance Calculation**: Shows estimated distance in kilometers
+- **User Type Switching**: Switch between Passenger and Rider modes
+
+### For Riders  
+- **Profile Management**: Update personal information and settings
+- **Account Status**: Automatic active/inactive status tracking on login/logout
+
+### Technical Features
+- **Real-time Geolocation**: Browser GPS integration for accurate positioning
+- **OpenStreetMap**: Free map data with Leaflet.js integration
+- **OSRM Routing**: Real road-based route calculation
+- **JWT Authentication**: Secure login with JSON Web Tokens
+- **SQLite Database**: Lightweight local database for user data
+
+## Tech Stack
+
+- **Frontend**: Next.js 16, React 19, Tailwind CSS 4
+- **Maps**: Leaflet.js, OpenStreetMap
+- **Routing**: OSRM (Open Source Routing Machine)
+- **Database**: SQLite with better-sqlite3
+- **Authentication**: JWT with bcryptjs
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+
+### Installation
 
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Build for Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+uber/
+├── app/                    # Next.js App Router
+│   ├── api/               # API Routes
+│   │   └── auth/         # Authentication endpoints
+│   ├── dashboard/        # Dashboard pages
+│   │   ├── passenger/    # Passenger dashboard
+│   │   ├── rider/         # Rider dashboard
+│   │   └── profile/       # Profile settings
+│   └── page.js           # Landing page
+├── lib/                   # Database configuration
+└── motoride.db           # SQLite database
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Endpoints
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/signup` | POST | User registration |
+| `/api/auth/login` | POST | User login |
+| `/api/auth/logout` | POST | User logout |
+| `/api/auth/update-profile` | POST | Update user profile |
+| `/api/auth/update-user-type` | POST | Switch user type |
 
-## Deploy on Vercel
+## Environment Variables
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Create a `.env.local` file:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```env
+JWT_SECRET=your_secret_key_here
+```
+
+## Default Location
+
+The app defaults to Kolkata, India (22.5726°N, 88.3639°E) when location services are unavailable.
+
+## License
+
+MIT License
