@@ -55,6 +55,8 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'sqlite_secret', { expiresIn: '7d' });
 
+    db.prepare('INSERT OR REPLACE INTO sessions (userId, token) VALUES (?, ?)').run(user.id, token);
+
     res.json({
       success: true,
       token,

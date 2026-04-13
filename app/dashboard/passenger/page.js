@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { io } from "socket.io-client";
 
 const Map = dynamic(() => import("./Map"), { ssr: false });
 
@@ -24,10 +25,15 @@ export default function PassengerDashboard() {
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
   const [pickupLoading, setPickupLoading] = useState(false);
   const [dropoffLoading, setDropoffLoading] = useState(false);
+
+  const [showRideRequest, setShowRideRequest] = useState(false);
+  const [requestStatus, setRequestStatus] = useState("");
+  const [currentRequestId, setCurrentRequestId] = useState(null);
   const pickupRef = useRef(null);
   const dropoffRef = useRef(null);
   const pickupTimeoutRef = useRef(null);
   const dropoffTimeoutRef = useRef(null);
+  const socketRef = useRef(null);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -41,6 +47,37 @@ export default function PassengerDashboard() {
       router.push("/dashboard/rider");
     }
   }, [router]);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const socket = io('http://localhost:5000');
+    socketRef.current = socket;
+    
+    socket.on('connect', () => {
+      console.log('Passenger socket connected');
+    });
+    
+    socket.on('ride-accepted', (data) => {
+      if (data.requestId === currentRequestId) {
+        setRequestStatus(`Rider found! Ride accepted.`);
+        setTimeout(() => {
+          setShowRideRequest(false);
+          setPickupLocation("");
+          setDropoffLocation("");
+          setPickupCoords(null);
+          setDropoffCoords(null);
+          setDistance(null);
+          setRouteCoords(null);
+          setCurrentRequestId(null);
+        }, 3000);
+      }
+    });
+    
+    return () => {
+      socket.disconnect();
+    };
+  }, [user, currentRequestId]);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -187,6 +224,86 @@ const calculateDistance = async (pickup, dropoff) => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     router.push("/login");
+  };
+
+  const handleFindRide = async () => {
+    if (!pickupCoords || !dropoffCoords || !distance) {
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    
+    setShowRideRequest(true);
+    setRequestStatus("Searching for nearby riders...");
+    
+    try {
+      const res = await fetch("http://localhost:5000/api/ride/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          pickup: pickupLocation,
+          dropoff: dropoffLocation,
+          pickupLat: pickupCoords.lat,
+          pickupLon: pickupCoords.lon,
+          dropoffLat: dropoffCoords.lat,
+          dropoffLon: dropoffCoords.lon,
+          distance: distance
+        })
+      });
+      const responseData = await res.json().catch(() => ({}));
+      console.log('Ride request response:', res.status, responseData);
+      
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentRequestId(data.requestId);
+        
+        if (data.status === "accepted") {
+          setRequestStatus("Rider found! Ride accepted.");
+          setTimeout(() => {
+            setShowRideRequest(false);
+            setPickupLocation("");
+            setDropoffLocation("");
+            setPickupCoords(null);
+            setDropoffCoords(null);
+            setDistance(null);
+            setRouteCoords(null);
+          }, 3000);
+        } else if (data.status === "pending") {
+          setRequestStatus("Searching for riders...");
+          setTimeout(async () => {
+            const checkRes = await fetch("http://localhost:5000/api/ride/status", {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            const checkData = await checkRes.json().catch(() => ({}));
+            console.log('Status check:', checkRes.status, checkData);
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              if (checkData.status === "accepted") {
+                setRequestStatus("Rider found! Ride accepted.");
+                setTimeout(() => {
+                  setShowRideRequest(false);
+                  setPickupLocation("");
+                  setDropoffLocation("");
+                  setPickupCoords(null);
+                  setDropoffCoords(null);
+                  setDistance(null);
+                  setRouteCoords(null);
+                }, 3000);
+              }
+            }
+          }, 5000);
+        }
+      } else {
+        setRequestStatus("Failed to find ride. Please try again.");
+        setTimeout(() => setShowRideRequest(false), 2000);
+      }
+    } catch (e) {
+      setRequestStatus("Error occurred. Please try again.");
+      setTimeout(() => setShowRideRequest(false), 2000);
+    }
   };
 
   if (!user) return null;
@@ -354,11 +471,26 @@ const calculateDistance = async (pickup, dropoff) => {
               </span>
             </div>
           )}
-          <button className="px-6 bg-black text-white rounded-lg font-medium">
+          <button 
+            onClick={handleFindRide}
+            disabled={!pickupCoords || !dropoffCoords || !distance}
+            className="px-6 bg-black text-white rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
             Find Ride
           </button>
         </div>
       </div>
+
+      {showRideRequest && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-lg font-medium text-black">{requestStatus}</p>
+          </div>
+        </div>
+      )}
 
       {showSwitchConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
