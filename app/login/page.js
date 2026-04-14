@@ -9,6 +9,7 @@ export default function Login() {
   const router = useRouter();
   const { showLoading, hideLoading } = useLoading();
   const [formData, setFormData] = useState({ email: "", password: "" });
+  const [userType, setUserType] = useState("passenger");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,7 +22,7 @@ export default function Login() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, userType }),
       });
 
       const data = await res.json();
@@ -35,7 +36,6 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify({ ...data.user, userType: data.user.userType || "passenger" }));
       hideLoading();
-      router.push("/dashboard");
       router.push("/dashboard");
     } catch (err) {
       setError("Connection failed. Is backend running?");
@@ -59,6 +59,31 @@ export default function Login() {
             </Link>
             <h1 className="text-3xl font-bold text-black">Welcome Back</h1>
             <p className="text-gray-600 mt-2">Login to your account</p>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => setUserType("passenger")}
+              className={`flex-1 py-2 rounded-lg font-medium border-2 ${
+                userType === "passenger"
+                  ? "border-green-500 bg-green-500 text-white"
+                  : "border-gray-300 text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              Passenger
+            </button>
+            <button
+              type="button"
+              onClick={() => setUserType("rider")}
+              className={`flex-1 py-2 rounded-lg font-medium border-2 ${
+                userType === "rider"
+                  ? "border-green-500 bg-green-500 text-white"
+                  : "border-gray-300 text-gray-600 hover:border-gray-400"
+              }`}
+            >
+              Rider
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

@@ -12,6 +12,7 @@ const initDB = () => {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
+      phone TEXT,
       userType TEXT DEFAULT 'passenger',
       reset_token TEXT,
       reset_expiry INTEGER,
@@ -22,6 +23,24 @@ const initDB = () => {
   // Add userType column safely (ignore if exists)
   try {
     db.exec(`ALTER TABLE users ADD COLUMN userType TEXT DEFAULT 'passenger'`);
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
+
+  // Add phone column safely (ignore if exists)
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN phone TEXT`);
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
+
+  // Add isActive column safely (ignore if exists)
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN isActive INTEGER DEFAULT 0`);
   } catch (e) {
     if (!e.message.includes('duplicate column name')) {
       throw e;

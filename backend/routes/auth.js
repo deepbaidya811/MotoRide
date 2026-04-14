@@ -9,7 +9,7 @@ const router = express.Router();
 // Signup Route
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone, userType } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -21,8 +21,9 @@ router.post('/signup', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const result = db.prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)')
-      .run(name, email, hashedPassword);
+    const userTypeValue = userType === 'rider' ? 'rider' : 'passenger';
+    const result = db.prepare('INSERT INTO users (name, email, password, phone, userType) VALUES (?, ?, ?, ?, ?)')
+      .run(name, email, hashedPassword, phone || null, userTypeValue);
 
     res.status(201).json({
       success: true,
@@ -37,13 +38,18 @@ router.post('/signup', async (req, res) => {
 // Login Route
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, userType } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = db.prepare('SELECT id, name, email, password FROM users WHERE email = ?').get(email);
+    let user;
+    if (userType) {
+      user = db.prepare('SELECT id, name, email, phone, userType FROM users WHERE email = ? AND userType = ?').get(email, userType);
+    } else {
+      user = db.prepare('SELECT id, name, email, phone, userType FROM users WHERE email = ?').get(email);
+    }
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -60,7 +66,7 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       token,
-      user: { id: user.id, name: user.name, email: user.email }
+      user: { id: user.id, name: user.name, email: user.email, phone: user.phone, userType: user.userType || 'passenger' }
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

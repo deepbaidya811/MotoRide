@@ -3,6 +3,7 @@ const router = express.Router();
 const { getDB } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 const rideStatusPath = path.join(__dirname, '../data/ride-status.json');
 
 const authenticate = (req, res, next) => {
@@ -10,19 +11,29 @@ const authenticate = (req, res, next) => {
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
   }
-  const stmt = getDB().prepare('SELECT * FROM sessions WHERE token = ?');
-  const session = stmt.get(token);
-  if (!session) {
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secretkey');
+    const userStmt = getDB().prepare('SELECT * FROM users WHERE id = ?');
+    req.user = userStmt.get(decoded.id);
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+    next();
+  } catch (e) {
     return res.status(401).json({ error: 'Invalid token' });
   }
-  const userStmt = getDB().prepare('SELECT * FROM users WHERE id = ?');
-  req.user = userStmt.get(session.userId);
-  next();
 };
 
 router.post('/request', authenticate, async (req, res) => {
   try {
     const { pickup, dropoff, pickupLat, pickupLon, dropoffLat, dropoffLon, distance, phone } = req.body;
+    console.log('Ride request:', { userId: req.user.id, name: req.user.name, phone: req.user.phone });
+    console.log('User from DB:', req.user);
+    
+    if (!req.user.name || !req.user.phone) {
+      return res.status(400).json({ error: 'Please update your profile with name and phone before booking' });
+    }
     
     if (!pickup || !dropoff || pickupLat == null || pickupLon == null || dropoffLat == null || dropoffLon == null || !distance) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -35,21 +46,26 @@ router.post('/request', authenticate, async (req, res) => {
       INSERT INTO rides (passenger_id, passenger_name, passenger_phone, pickup, dropoff, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, distance, fare, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'searching')
     `);
-    const result = stmt.run(req.user.id, req.user.name, phone, pickup, dropoff, pickupLat, pickupLon, dropoffLat, dropoffLon, distance, fare);
+    const result = stmt.run(req.user.id, req.user.name, req.user.phone, pickup, dropoff, pickupLat, pickupLon, dropoffLat, dropoffLon, distance, fare);
     
     // Save to JSON
-    const rideStatus = JSON.parse(fs.readFileSync(rideStatusPath, 'utf8'));
-    rideStatus.rides.push({
-      id: result.lastInsertRowid,
-      passengerId: req.user.id,
-      passengerName: req.user.name,
-      phone,
-      pickup,
-      dropoff,
-      status: 'searching',
-      timestamp: new Date().toISOString()
-    });
-    fs.writeFileSync(rideStatusPath, JSON.stringify(rideStatus, null, 2));
+    try {
+      const rideStatus = JSON.parse(fs.readFileSync(rideStatusPath, 'utf8'));
+      rideStatus.rides.push({
+        id: result.lastInsertRowid,
+        passengerId: req.user.id,
+        passengerName: req.user.name,
+        phone: req.user.phone,
+        pickup,
+        dropoff,
+        status: 'searching',
+        timestamp: new Date().toISOString()
+      });
+      fs.writeFileSync(rideStatusPath, JSON.stringify(rideStatus, null, 2));
+      console.log('Ride saved to JSON');
+    } catch (jsonErr) {
+      console.error('Error saving to JSON:', jsonErr.message);
+    }
     
     const io = req.app.get('io');
     io.to('riders').emit('new-ride', {
@@ -130,38 +146,23 @@ router.get('/dashboard', authenticate, (req, res) => {
   }
 });
 
-router.post('/accept', authenticate, (req, res) => {
+router.post('/cancel', authenticate, (req, res) => {
   try {
-    const { requestId } = req.body;
+    const { rideId } = req.body;
     
-    const getRequest = getDB().prepare('SELECT * FROM ride_requests WHERE id = ?');
-    const request = getRequest.get(requestId);
-    
-    if (!request) {
-      return res.status(404).json({ error: 'Request not found' });
+    if (!rideId) {
+      return res.status(400).json({ error: 'Ride ID required' });
     }
     
-    const updateStmt = getDB().prepare(`
-      UPDATE ride_requests SET rider_id = ?, status = 'accepted' WHERE id = ?
-    `);
-    updateStmt.run(req.user.id, requestId);
+    getDB().prepare('DELETE FROM rides WHERE id = ? AND passenger_id = ?').run(rideId, req.user.id);
     
-    const completedStmt = getDB().prepare(`
-      INSERT INTO completed_rides (rider_id, passenger_id, pickup, dropoff, distance, fare)
-      SELECT ?, passenger_id, pickup, dropoff, distance, fare FROM ride_requests WHERE id = ?
-    `);
-    completedStmt.run(req.user.id, requestId);
+    const rideStatus = JSON.parse(fs.readFileSync(rideStatusPath, 'utf8'));
+    rideStatus.rides = rideStatus.rides.filter(r => r.id !== rideId);
+    fs.writeFileSync(rideStatusPath, JSON.stringify(rideStatus, null, 2));
     
-    const io = req.app.get('io');
-    io.emit('ride-accepted', {
-      requestId,
-      riderId: req.user.id,
-      riderName: req.user.name
-    });
-    
-    res.json({ status: 'accepted' });
+    res.json({ success: true, message: 'Ride cancelled' });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to accept ride' });
+    res.status(500).json({ error: 'Failed to cancel ride' });
   }
 });
 

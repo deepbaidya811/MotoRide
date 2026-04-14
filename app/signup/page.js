@@ -12,6 +12,7 @@ export default function Signup() {
     phone: "",
     password: "",
     confirmPassword: "",
+    userType: "passenger",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +36,8 @@ export default function Signup() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          phone: formData.phone
+          phone: formData.phone,
+          userType: formData.userType
         }),
       });
 
@@ -46,8 +48,8 @@ export default function Signup() {
         return;
       }
 
-      localStorage.setItem("user", JSON.stringify({ ...data.user, userType: "passenger" }));
-      router.push("/dashboard/passenger");
+      localStorage.setItem("user", JSON.stringify({ ...data.user, userType: formData.userType }));
+      router.push(formData.userType === "rider" ? "/dashboard/rider" : "/dashboard/passenger");
     } catch (err) {
       setError("Something went wrong");
     } finally {
@@ -119,6 +121,34 @@ export default function Signup() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent outline-none"
                 placeholder="Enter your phone number"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">I want to use as</label>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, userType: "passenger" })}
+                  className={`flex-1 py-3 rounded-lg font-medium border-2 ${
+                    formData.userType === "passenger"
+                      ? "border-black bg-black text-white"
+                      : "border-gray-300 text-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  Passenger
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, userType: "rider" })}
+                  className={`flex-1 py-3 rounded-lg font-medium border-2 ${
+                    formData.userType === "rider"
+                      ? "border-black bg-black text-white"
+                      : "border-gray-300 text-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  Rider
+                </button>
+              </div>
             </div>
 
             <div>

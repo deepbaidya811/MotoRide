@@ -10,7 +10,7 @@ export async function POST(request) {
       return Response.json({ error: 'Please provide email and password' }, { status: 400 });
     }
 
-    const user = db.prepare('SELECT id, name, email, password FROM users WHERE email = ?').get(email);
+    const user = db.prepare('SELECT id, name, email, phone, password FROM users WHERE email = ?').get(email);
     if (!user) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 });
     }
@@ -30,7 +30,9 @@ export async function POST(request) {
       user: {
         id: user.id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        phone: user.phone,
+        userType: user.userType || "passenger"
       }
     });
 

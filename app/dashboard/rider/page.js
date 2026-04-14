@@ -8,7 +8,6 @@ export default function RiderDashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState("available");
   const [history, setHistory] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -109,25 +108,6 @@ export default function RiderDashboard() {
     }
   };
 
-  const switchToPassenger = async () => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      try {
-        await fetch("/api/auth/update-user-type", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({ userType: "passenger" })
-        });
-      } catch (e) {}
-    }
-    const updatedUser = { ...user, userType: "passenger" };
-    localStorage.setItem("user", JSON.stringify(updatedUser));
-    router.push("/dashboard/passenger");
-  };
-
   const handleLogout = async () => {
     const token = localStorage.getItem("token");
     if (token) {
@@ -176,12 +156,6 @@ export default function RiderDashboard() {
                   <p className="font-medium text-black">{user.name}</p>
                   <p className="text-sm text-gray-500">{user.email}</p>
                 </div>
-                <button
-                  onClick={() => setShowSwitchConfirm(true)}
-                  className="w-full text-left px-4 py-2 text-green-600 hover:bg-gray-50 font-medium"
-                >
-                  Switch to Passenger
-                </button>
                 <button
                   onClick={() => router.push("/dashboard/profile")}
                   className="w-full text-left px-4 py-2 text-black hover:bg-gray-50"
@@ -290,29 +264,6 @@ export default function RiderDashboard() {
           )
         )}
       </div>
-
-      {showSwitchConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-xl font-bold text-black mb-4">Switch to Passenger?</h3>
-            <p className="text-gray-600 mb-6">You will be able to book rides from riders.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowSwitchConfirm(false)}
-                className="flex-1 bg-gray-200 text-black py-3 rounded-lg font-semibold hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={switchToPassenger}
-                className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600"
-              >
-                Switch
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
