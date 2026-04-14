@@ -36,7 +36,7 @@ export default function Login() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify({ ...data.user, userType: data.user.userType || "passenger" }));
       hideLoading();
-      router.push("/dashboard");
+      router.push(userType === "rider" ? "/dashboard/rider" : "/dashboard/passenger");
     } catch (err) {
       setError("Connection failed. Is backend running?");
       hideLoading();

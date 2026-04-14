@@ -53,7 +53,7 @@ export default function RiderDashboard() {
     socket.on("connect", () => {
       socket.emit("join-rider");
     });
-    socket.on("new-ride-request", (data) => {
+    socket.on("new-ride", (data) => {
       setRequests(prev => [data, ...prev]);
     });
     return () => {
@@ -121,6 +121,25 @@ export default function RiderDashboard() {
     router.push("/login");
   };
 
+  const switchToPassenger = async () => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        await fetch("/api/auth/update-user-type", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ userType: "passenger" })
+        });
+      } catch (e) {}
+    }
+    const updatedUser = { ...user, userType: "passenger" };
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+    router.push("/dashboard/passenger");
+  };
+
   const toggleSheet = () => {
     setSheetExpanded(!sheetExpanded);
   };
@@ -158,6 +177,12 @@ export default function RiderDashboard() {
                   <p className="font-medium text-black">{user.name}</p>
                   <p className="text-sm text-gray-500">{user.email}</p>
                 </div>
+                <button
+                  onClick={switchToPassenger}
+                  className="w-full text-left px-4 py-2 text-black hover:bg-gray-50"
+                >
+                  Switch to Passenger
+                </button>
                 <button
                   onClick={() => router.push("/dashboard/profile")}
                   className="w-full text-left px-4 py-2 text-black hover:bg-gray-50"
@@ -232,7 +257,7 @@ export default function RiderDashboard() {
               <div className="space-y-2">
                 {requests.map((req, i) => (
                   <div key={i} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start mb-2">
                       <div className="flex-1">
                         <p className="font-medium text-black text-sm">{req.pickup}</p>
                         <p className="text-xs text-gray-500">to {req.dropoff}</p>
@@ -242,9 +267,15 @@ export default function RiderDashboard() {
                         <p className="text-xs text-gray-500">{req.distance} km</p>
                       </div>
                     </div>
+                    {req.passengerName && (
+                      <div className="bg-gray-50 rounded p-2 mb-2">
+                        <p className="text-xs font-medium text-black">Passenger: {req.passengerName}</p>
+                        <p className="text-xs text-gray-500">Phone: {req.passengerPhone}</p>
+                      </div>
+                    )}
                     <button
                       onClick={() => acceptRide(req.id)}
-                      className="mt-2 w-full bg-green-500 text-white py-1.5 rounded-lg font-medium text-sm hover:bg-green-600"
+                      className="w-full bg-green-500 text-white py-1.5 rounded-lg font-medium text-sm hover:bg-green-600"
                     >
                       Accept
                     </button>

@@ -55,10 +55,14 @@ export default function PassengerDashboard() {
     
     socket.on('connect', () => {
       console.log('Passenger socket connected');
+      const freshUser = JSON.parse(localStorage.getItem("user") || "{}");
+      if (freshUser.id) {
+        socket.emit('join-passenger', freshUser.id);
+      }
     });
     
     socket.on('ride-accepted', (data) => {
-      if (data.requestId === currentRequestId) {
+      if (data.rideId === currentRequestId) {
         setRequestStatus(`Rider found! Ride accepted.`);
         setTimeout(() => {
           setShowRideRequest(false);
@@ -206,6 +210,25 @@ const calculateDistance = async (pickup, dropoff) => {
     router.push("/login");
   };
 
+  const switchToRider = async () => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      try {
+        await fetch("/api/auth/update-user-type", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ userType: "rider" })
+        });
+      } catch (e) {}
+    }
+    const updatedUser = { ...user, userType: "rider" };
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+    router.push("/dashboard/rider");
+  };
+
   const handleFindRide = async () => {
     if (!pickupCoords || !dropoffCoords || !distance) {
       return;
@@ -315,6 +338,12 @@ const calculateDistance = async (pickup, dropoff) => {
                   <p className="font-medium text-black">{user.name}</p>
                   <p className="text-sm text-gray-500">{user.email}</p>
                 </div>
+                <button
+                  onClick={switchToRider}
+                  className="w-full text-left px-4 py-2 text-black hover:bg-gray-50"
+                >
+                  Switch to Rider
+                </button>
                 <button
                   onClick={() => router.push("/dashboard/profile")}
                   className="w-full text-left px-4 py-2 text-black hover:bg-gray-50"

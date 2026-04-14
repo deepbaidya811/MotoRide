@@ -4,13 +4,18 @@ import jwt from 'jsonwebtoken';
 
 export async function POST(request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, userType } = await request.json();
 
     if (!email || !password) {
       return Response.json({ error: 'Please provide email and password' }, { status: 400 });
     }
 
-    const user = db.prepare('SELECT id, name, email, phone, password FROM users WHERE email = ?').get(email);
+    let user;
+    if (userType) {
+      user = db.prepare('SELECT id, name, email, phone, password, userType FROM users WHERE email = ? AND userType = ?').get(email, userType);
+    } else {
+      user = db.prepare('SELECT id, name, email, phone, password, userType FROM users WHERE email = ?').get(email);
+    }
     if (!user) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 });
     }

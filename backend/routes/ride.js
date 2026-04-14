@@ -120,7 +120,7 @@ router.get('/dashboard', authenticate, (req, res) => {
     const history = historyStmt.all(req.user.id);
     
     const requestsStmt = getDB().prepare(`
-      SELECT * FROM ride_requests WHERE status = 'pending' ORDER BY created_at DESC
+      SELECT * FROM rides WHERE status = 'searching' ORDER BY created_at DESC
     `);
     const requests = requestsStmt.all();
     
@@ -135,6 +135,8 @@ router.get('/dashboard', authenticate, (req, res) => {
       })),
       requests: requests.map(r => ({
         id: r.id,
+        passengerName: r.passenger_name,
+        passengerPhone: r.passenger_phone,
         pickup: r.pickup,
         dropoff: r.dropoff,
         distance: r.distance,
@@ -160,9 +162,63 @@ router.post('/cancel', authenticate, (req, res) => {
     rideStatus.rides = rideStatus.rides.filter(r => r.id !== rideId);
     fs.writeFileSync(rideStatusPath, JSON.stringify(rideStatus, null, 2));
     
+    const io = req.app.get('io');
+    io.to('riders').emit('ride-cancelled', { rideId });
+    
     res.json({ success: true, message: 'Ride cancelled' });
   } catch (e) {
     res.status(500).json({ error: 'Failed to cancel ride' });
+  }
+});
+
+router.post('/accept', authenticate, (req, res) => {
+  try {
+    const { rideId } = req.body;
+    
+    if (!rideId) {
+      return res.status(400).json({ error: 'Ride ID required' });
+    }
+    
+    const ride = getDB().prepare('SELECT * FROM rides WHERE id = ? AND status = ?').get(rideId, 'searching');
+    if (!ride) {
+      return res.status(404).json({ error: 'Ride not found or already accepted' });
+    }
+    
+    getDB().prepare('UPDATE rides SET rider_id = ?, status = ? WHERE id = ?').run(req.user.id, 'accepted', rideId);
+    
+    const io = req.app.get('io');
+    io.to('riders').emit('ride-accepted', { rideId, riderId: req.user.id });
+    io.to('passenger-' + ride.passenger_id).emit('ride-accepted', {
+      rideId,
+      riderId: req.user.id,
+      riderName: req.user.name,
+      riderPhone: req.user.phone
+    });
+    
+    res.json({ success: true, message: 'Ride accepted', rideId });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to accept ride' });
+  }
+});
+
+router.get('/available', authenticate, (req, res) => {
+  try {
+    const stmt = getDB().prepare('SELECT * FROM rides WHERE status = ? ORDER BY created_at DESC');
+    const rides = stmt.all('searching');
+    
+    res.json({ 
+      rides: rides.map(r => ({
+        id: r.id,
+        passengerName: r.passenger_name,
+        passengerPhone: r.passenger_phone,
+        pickup: r.pickup,
+        dropoff: r.dropoff,
+        distance: r.distance,
+        fare: r.fare
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get rides' });
   }
 });
 

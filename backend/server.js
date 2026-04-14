@@ -26,6 +26,11 @@ io.on('connection', (socket) => {
     console.log('Rider joined:', socket.id);
   });
   
+  socket.on('join-passenger', (userId) => {
+    socket.join('passenger-' + userId);
+    console.log('Passenger joined:', userId);
+  });
+  
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });
