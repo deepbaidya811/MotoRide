@@ -10,13 +10,14 @@ const initDB = () => {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL,
       password TEXT NOT NULL,
       phone TEXT,
       userType TEXT DEFAULT 'passenger',
       reset_token TEXT,
       reset_expiry INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(email, userType)
     );
   `);
 
@@ -45,6 +46,16 @@ const initDB = () => {
     if (!e.message.includes('duplicate column name')) {
       throw e;
     }
+  }
+
+  // Drop old unique constraint on email if exists and recreate with composite (email, userType)
+  try {
+    db.exec(`DROP INDEX IF EXISTS sqlite_autoindex_users_1`);
+  } catch (e) {}
+  try {
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_email_usertype ON users(email, userType)`);
+  } catch (e) {
+    // Ignore if index exists
   }
 
   // Create Rides table

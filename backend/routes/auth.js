@@ -15,9 +15,9 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existingUser = db.prepare('SELECT id FROM users WHERE email = ? AND userType = ?').get(email, userTypeValue);
     if (existingUser) {
-      return res.status(400).json({ error: 'Email already registered' });
+      return res.status(400).json({ error: 'Email already registered for this account type' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

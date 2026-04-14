@@ -2,17 +2,24 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { io } from "socket.io-client";
+
+const Map = dynamic(() => import("./Map"), { ssr: false });
 
 export default function RiderDashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [activeTab, setActiveTab] = useState("available");
-  const [history, setHistory] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState(null);
+  const [activeTab, setActiveTab] = useState("available");
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const socketRef = useRef(null);
+  const dragStartY = useRef(0);
+  const dragStartHeight = useRef(0);
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
@@ -28,25 +35,27 @@ export default function RiderDashboard() {
   }, [router]);
 
   useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+      },
+      () => {},
+      { enableHighAccuracy: true }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
-    
-    const socket = io('http://localhost:5000');
+    const socket = io("http://localhost:5000");
     socketRef.current = socket;
-    
-    socket.on('connect', () => {
-      console.log('Socket connected');
-      socket.emit('join-rider');
+    socket.on("connect", () => {
+      socket.emit("join-rider");
     });
-    
-    socket.on('new-ride-request', (data) => {
-      console.log('New ride request:', data);
+    socket.on("new-ride-request", (data) => {
       setRequests(prev => [data, ...prev]);
     });
-    
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
-    });
-    
     return () => {
       socket.disconnect();
     };
@@ -63,18 +72,13 @@ export default function RiderDashboard() {
         const res = await fetch("http://localhost:5000/api/ride/dashboard", {
           headers: { Authorization: `Bearer ${token}` }
         });
-        console.log('Dashboard response:', res.status);
         if (res.ok) {
           const data = await res.json();
-          console.log('Dashboard data:', data);
-          setHistory(data.history || []);
           setRequests(data.requests || []);
-        } else {
-          const err = await res.text();
-          console.error('Dashboard error:', err);
+          setHistory(data.history || []);
         }
       } catch (e) {
-        console.error('Fetch error:', e);
+        console.error(e);
       } finally {
         setLoading(false);
       }
@@ -94,17 +98,11 @@ export default function RiderDashboard() {
         },
         body: JSON.stringify({ requestId })
       });
-      console.log('Accept response:', res.status);
       if (res.ok) {
-        const data = await res.json();
-        console.log('Accept data:', data);
         setRequests(requests.filter(r => r.id !== requestId));
-      } else {
-        const err = await res.text();
-        console.error('Accept error:', err);
       }
     } catch (e) {
-      console.error('Accept fetch error:', e);
+      console.error(e);
     }
   };
 
@@ -121,6 +119,10 @@ export default function RiderDashboard() {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     router.push("/login");
+  };
+
+  const toggleSheet = () => {
+    setSheetExpanded(!sheetExpanded);
   };
 
   if (!user) return null;
@@ -174,95 +176,107 @@ export default function RiderDashboard() {
         </div>
       </header>
 
-      <div className="pt-20 px-4 overflow-auto" style={{ height: "calc(100vh - 80px)" }}>
-        <div className="flex justify-center border-b border-gray-200 mb-4">
+      <div className="fixed top-20 left-0 right-0 bottom-0" style={{ height: "calc(100vh - 80px)", zIndex: 10 }}>
+        <Map riderLocation={userLocation} />
+        {requests.length > 0 && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+            <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+            <span className="font-medium">{requests.length} rides nearby</span>
+          </div>
+        )}
+      </div>
+
+      <div
+        className={`fixed left-0 right-0 bg-white border-t border-gray-200 transition-all duration-300 ${sheetExpanded ? "top-10" : "bottom-0"}`}
+        style={{
+          zIndex: sheetExpanded ? 40 : 50,
+          height: sheetExpanded ? "calc(100vh - 80px)" : "auto",
+          maxHeight: sheetExpanded ? "calc(100vh - 80px)" : "40vh",
+          borderTopLeftRadius: "20px",
+          borderTopRightRadius: "20px",
+          boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.1)"
+        }}
+      >
+        <div
+          onClick={toggleSheet}
+          className="flex items-center justify-center py-3 cursor-pointer border-b border-gray-200"
+          style={{ borderTopLeftRadius: "20px", borderTopRightRadius: "20px" }}
+        >
+          <div className="w-12 h-1 bg-gray-300 rounded-full"></div>
+        </div>
+        <div className="flex border-b border-gray-200">
           <button
             onClick={() => setActiveTab("available")}
-            className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-              activeTab === "available"
-                ? "border-green-500 text-green-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            className={`flex-1 py-3 font-medium text-center border-b-2 ${activeTab === "available" ? "border-green-500 text-green-600" : "border-transparent text-gray-500"}`}
           >
             Available
           </button>
           <button
             onClick={() => setActiveTab("history")}
-            className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-              activeTab === "history"
-                ? "border-green-500 text-green-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            className={`flex-1 py-3 font-medium text-center border-b-2 ${activeTab === "history" ? "border-green-500 text-green-600" : "border-transparent text-gray-500"}`}
           >
             History
           </button>
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
-          </div>
-        ) : activeTab === "available" ? (
-          requests.length === 0 ? (
-            <div className="text-center py-12">
-              <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
-              </svg>
-              <p className="text-gray-500">No available rides</p>
+        <div className="p-4 overflow-auto" style={{ maxHeight: sheetExpanded ? "calc(100vh - 180px)" : "calc(40vh - 100px)" }}>
+          {loading ? (
+            <div className="flex items-center justify-center h-20">
+              <div className="w-6 h-6 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {requests.map((req, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-medium text-black">{req.pickup}</p>
-                      <p className="text-sm text-gray-500">to {req.dropoff}</p>
+          ) : activeTab === "available" ? (
+            requests.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-gray-500">No available rides</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {requests.map((req, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-medium text-black text-sm">{req.pickup}</p>
+                        <p className="text-xs text-gray-500">to {req.dropoff}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-green-600 font-semibold">₹{req.fare}</span>
+                        <p className="text-xs text-gray-500">{req.distance} km</p>
+                      </div>
                     </div>
-                    <span className="text-green-600 font-semibold">₹{req.fare}</span>
-                  </div>
-                  <div className="flex justify-between items-center mt-3">
-                    <span className="text-sm text-gray-500">{req.distance} km</span>
                     <button
                       onClick={() => acceptRide(req.id)}
-                      className="bg-green-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-600"
+                      className="mt-2 w-full bg-green-500 text-white py-1.5 rounded-lg font-medium text-sm hover:bg-green-600"
                     >
                       Accept
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          history.length === 0 ? (
-            <div className="text-center py-12">
-              <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-gray-500">No ride history yet</p>
-            </div>
+                ))}
+              </div>
+            )
           ) : (
-            <div className="space-y-3">
-              {history.map((ride, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-medium text-black">{ride.pickup}</p>
-                      <p className="text-sm text-gray-500">to {ride.dropoff}</p>
+            history.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-gray-500">No ride history</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {history.map((ride, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-medium text-black text-sm">{ride.pickup}</p>
+                        <p className="text-xs text-gray-500">to {ride.dropoff}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-green-600 font-semibold">₹{ride.fare}</span>
+                        <p className="text-xs text-gray-500">{ride.distance} km</p>
+                      </div>
                     </div>
-                    <span className="text-green-600 font-semibold">₹{ride.fare}</span>
                   </div>
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>{ride.date}</span>
-                    <span>{ride.distance} km</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        )}
+                ))}
+              </div>
+            )
+          )}
+        </div>
       </div>
     </div>
   );
